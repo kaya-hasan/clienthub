@@ -19,6 +19,17 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+### Backend `.env` Dosyası
+
+`backend/.env` dosyası oluştur:
+
+```env
+APP_NAME=CRM App API
+ENVIRONMENT=dev
+DEBUG=true
+DATABASE_URL=sqlite:///./crm.db
+```
+
 ### Geliştirme Sunucusunu Başlatma
 
 ```bash
@@ -45,6 +56,28 @@ alembic current
 
 ```bash
 cd frontend
+npm install
+npm run dev
+```
+
+Frontend varsayılan olarak `http://localhost:5173` adresinde çalışır.
+
+## Hızlı Başlangıç (2 Terminal)
+
+### Terminal 1 - Backend
+
+```bash
+cd crm-app/backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
+### Terminal 2 - Frontend
+
+```bash
+cd crm-app/frontend
 npm install
 npm run dev
 ```
