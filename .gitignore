@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.sqlite3
+.venv/
+venv/
+
+# FastAPI local env/data
+backend/.env
+backend/crm.db
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
