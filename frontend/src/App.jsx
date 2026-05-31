@@ -14,6 +14,8 @@ function App() {
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [activeMenuItem, setActiveMenuItem] = useState("Dashboard");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   const translations = {
     tr: {
@@ -24,11 +26,11 @@ function App() {
       dashboardTitle: "Dashboard",
       stats: {
         total: "Müşteriler",
-        new: "Yeni Kayıt",
-        active: "Aktif",
+        new: "Lead",
+        active: "Müşteri",
         withPhone: "Telefonlu",
         live: "Canlı",
-        last7Days: "7 gün",
+        last7Days: "Toplam",
         totalHint: "Toplam",
         contactHint: "İletişim",
       },
@@ -41,9 +43,11 @@ function App() {
         colPhone: "Telefon",
         colCity: "Şehir",
         colStatus: "Durum",
-        statusActive: "Aktif",
-        statusNew: "Yeni",
-        statusInactive: "Pasif",
+        colLastContact: "Son İletişim",
+        statusLead: "Lead",
+        statusContacted: "Görüşüldü",
+        statusCustomer: "Müşteri",
+        statusLost: "Kaybedildi",
       },
       details: {
         customerTitle: "Seçili Müşteri",
@@ -75,6 +79,14 @@ function App() {
         saving: "Kaydediliyor...",
         validationRequired: "Ad ve Telefon zorunludur.",
       },
+      filters: {
+        searchPlaceholder: "İsim veya telefon ile ara",
+        statusAll: "Tüm Durumlar",
+      },
+      todosTitle: "Bugün Yapılacaklar",
+      noTodos: "Bugün aranacak müşteri yok.",
+      todayContacted: "Bugün iletişim kuruldu",
+      daysNotContacted: "gündür aranmamış",
       comingSoon: "Yakında",
     },
     en: {
@@ -85,11 +97,11 @@ function App() {
       dashboardTitle: "Dashboard",
       stats: {
         total: "Customers",
-        new: "New Records",
-        active: "Active",
+        new: "Leads",
+        active: "Customers",
         withPhone: "With Phone",
         live: "Live",
-        last7Days: "Last 7 days",
+        last7Days: "Total",
         totalHint: "Total",
         contactHint: "Contact",
       },
@@ -102,9 +114,11 @@ function App() {
         colPhone: "Phone",
         colCity: "City",
         colStatus: "Status",
-        statusActive: "Active",
-        statusNew: "New",
-        statusInactive: "Inactive",
+        colLastContact: "Last Contact",
+        statusLead: "Lead",
+        statusContacted: "Contacted",
+        statusCustomer: "Customer",
+        statusLost: "Lost",
       },
       details: {
         customerTitle: "Selected Customer",
@@ -136,25 +150,27 @@ function App() {
         saving: "Saving...",
         validationRequired: "Name and phone are required.",
       },
+      filters: {
+        searchPlaceholder: "Search by name or phone",
+        statusAll: "All Statuses",
+      },
+      todosTitle: "Today Tasks",
+      noTodos: "No customers to call today.",
+      todayContacted: "Contacted today",
+      daysNotContacted: "days without contact",
       comingSoon: "Coming Soon",
     },
   };
 
   const t = translations[locale];
 
-  function getStatus(createdAt) {
-    if (!createdAt) return "active";
-    const createdDate = new Date(createdAt);
-    if (Number.isNaN(createdDate.getTime())) return "active";
-    const ageInDays = (Date.now() - createdDate.getTime()) / (1000 * 60 * 60 * 24);
-    return ageInDays <= 7 ? "new" : "active";
-  }
-
-  function formatDate(dateString) {
-    if (!dateString) return "-";
-    const date = new Date(dateString);
+  function formatDaysWithoutContact(lastContactedAt) {
+    if (!lastContactedAt) return locale === "tr" ? "Kayıt yok" : "No record";
+    const date = new Date(lastContactedAt);
     if (Number.isNaN(date.getTime())) return "-";
-    return date.toLocaleDateString(locale === "tr" ? "tr-TR" : "en-US");
+    const days = Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
+    if (days <= 0) return t.todayContacted;
+    return `${days} ${t.daysNotContacted}`;
   }
 
   async function loadCustomers() {
@@ -167,8 +183,10 @@ function App() {
       email: item.email || "-",
       city: item.city || "-",
       notes: item.notes || "",
-      status: getStatus(item.created_at),
-      lastContact: formatDate(item.updated_at || item.created_at),
+      status: item.status || "lead",
+      lastContactedAt: item.last_contacted_at,
+      lastContactText: formatDaysWithoutContact(item.last_contacted_at),
+      lastContact: formatDaysWithoutContact(item.last_contacted_at),
     }));
 
     setCustomers(mapped);
@@ -183,36 +201,44 @@ function App() {
   }, []);
 
   const activities = [
-    {
-      id: "1",
-      type: "call",
-      note: "Duyurulduğumuz yeni kampanyalar hakkında bilgi verildi.",
-      date: "26.05.2026",
-    },
-    {
-      id: "2",
-      type: "visit",
-      note: "Ürünlerimiz hakkında detaylı sunum yapıldı, katalog teslim edildi.",
-      date: "24.05.2026",
-    },
-    {
-      id: "3",
-      type: "note",
-      note: "Fiyat listesi talep edildi, en kısa sürede gönderilecek.",
-      date: "20.05.2026",
-    },
+    { id: "1", type: "call", note: "Takip görüşmesi tamamlandı.", date: "26.05.2026" },
+    { id: "2", type: "visit", note: "Ürün sunumu yapıldı.", date: "24.05.2026" },
+    { id: "3", type: "note", note: "Fiyat listesi gönderilecek.", date: "20.05.2026" },
   ];
+
+  const filteredCustomers = useMemo(() => {
+    return customers.filter((c) => {
+      const term = searchTerm.trim().toLowerCase();
+      const matchedSearch =
+        !term || c.name.toLowerCase().includes(term) || c.phone.toLowerCase().includes(term);
+      const matchedStatus = statusFilter === "all" || c.status === statusFilter;
+      return matchedSearch && matchedStatus;
+    });
+  }, [customers, searchTerm, statusFilter]);
+
+  const todoCustomers = useMemo(() => {
+    return customers
+      .filter((c) => c.status !== "lost")
+      .filter((c) => {
+        if (!c.lastContactedAt) return true;
+        const d = new Date(c.lastContactedAt);
+        if (Number.isNaN(d.getTime())) return true;
+        const days = Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
+        return days >= 3;
+      })
+      .slice(0, 5);
+  }, [customers]);
 
   const stats = useMemo(() => {
     const total = customers.length;
-    const newCount = customers.filter((c) => c.status === "new").length;
-    const activeCount = customers.filter((c) => c.status === "active").length;
+    const leadCount = customers.filter((c) => c.status === "lead").length;
+    const customerCount = customers.filter((c) => c.status === "customer").length;
     const withPhone = customers.filter((c) => c.phone && c.phone !== "-").length;
 
     return [
       { id: 1, label: t.stats.total, value: String(total), trend: t.stats.live, tone: "success" },
-      { id: 2, label: t.stats.new, value: String(newCount), trend: t.stats.last7Days, tone: "warning" },
-      { id: 3, label: t.stats.active, value: String(activeCount), trend: t.stats.totalHint, tone: "success" },
+      { id: 2, label: t.stats.new, value: String(leadCount), trend: t.stats.last7Days, tone: "warning" },
+      { id: 3, label: t.stats.active, value: String(customerCount), trend: t.stats.totalHint, tone: "success" },
       { id: 4, label: t.stats.withPhone, value: String(withPhone), trend: t.stats.contactHint, tone: "danger" },
     ];
   }, [customers, t]);
@@ -247,11 +273,51 @@ function App() {
           {activeMenuItem === t.sidebarMenu[0] && (
             <>
               <StatsGrid stats={stats} />
+
+              <section className="customers-panel filters-panel">
+                <input
+                  className="filter-input"
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder={t.filters.searchPlaceholder}
+                />
+                <select
+                  className="filter-select"
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                >
+                  <option value="all">{t.filters.statusAll}</option>
+                  <option value="lead">{t.table.statusLead}</option>
+                  <option value="contacted">{t.table.statusContacted}</option>
+                  <option value="customer">{t.table.statusCustomer}</option>
+                  <option value="lost">{t.table.statusLost}</option>
+                </select>
+              </section>
+
               <CustomersTable
-                customers={customers}
+                customers={filteredCustomers}
                 onSelectCustomer={(customer) => setSelectedCustomer(customer)}
                 texts={t.table}
               />
+
+              <section className="customers-panel">
+                <div className="panel-header">
+                  <h3 className="panel-title">{t.todosTitle}</h3>
+                </div>
+                {todoCustomers.length === 0 ? (
+                  <p>{t.noTodos}</p>
+                ) : (
+                  <ul className="todo-list">
+                    {todoCustomers.map((c) => (
+                      <li key={c.id}>
+                        <strong>{c.name}</strong> - {c.lastContactText}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+
               <DetailsPanel
                 selectedCustomer={
                   selectedCustomer || {

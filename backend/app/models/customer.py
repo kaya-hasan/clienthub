@@ -1,4 +1,3 @@
-# pyrefly: ignore [missing-import]
 from sqlalchemy import Column, Integer, String, DateTime, func
 from app.db.session import Base
 
@@ -13,5 +12,7 @@ class Customer(Base):
     city = Column(String, index=True)
     created_at = Column(DateTime, index=True, default=func.now())
     updated_at = Column(DateTime, index=True, default=func.now(), onupdate=func.now())
+    status = Column(String, default="lead", index=True, nullable=False)
+    last_contacted_at = Column(DateTime, nullable=True, index=True)
 
 

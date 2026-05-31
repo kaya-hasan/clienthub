@@ -12,6 +12,7 @@ def create_customer(db: Session, customer: CustomerCreate):
   db.add(db_customer)
   db.commit()
   db.refresh(db_customer)
+
   return db_customer
 
 

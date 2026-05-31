@@ -1,8 +1,9 @@
 function CustomersTable({ customers, onSelectCustomer, texts }) {
   const statusLabel = {
-    active: texts.statusActive,
-    new: texts.statusNew,
-    inactive: texts.statusInactive,
+    lead: texts.statusLead,
+    contacted: texts.statusContacted,
+    customer: texts.statusCustomer,
+    lost: texts.statusLost,
   };
 
   return (
@@ -20,6 +21,7 @@ function CustomersTable({ customers, onSelectCustomer, texts }) {
               <th>{texts.colPhone}</th>
               <th>{texts.colCity}</th>
               <th>{texts.colStatus}</th>
+              <th>{texts.colLastContact}</th>
             </tr>
           </thead>
           <tbody>
@@ -34,6 +36,7 @@ function CustomersTable({ customers, onSelectCustomer, texts }) {
                     {statusLabel[c.status] || c.status}
                   </span>
                 </td>
+                <td>{c.lastContactText}</td>
               </tr>
             ))}
           </tbody>
