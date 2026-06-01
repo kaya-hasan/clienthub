@@ -5,8 +5,10 @@ import StatsGrid from "./components/StatsGrid";
 import CustomersTable from "./components/CustomersTable";
 import DetailsPanel from "./components/DetailsPanel";
 import CustomerForm from "./components/CustomerForm";
+import ActivitiesPanel from "./components/ActivitiesPanel";
 import { useEffect, useMemo, useState } from "react";
 import { getCustomers, updateCustomer } from "./services/customerService";
+import { createActivity, getActivities, getCustomerActivities } from "./services/activityService";
 
 function App() {
   const [locale, setLocale] = useState("tr");
@@ -16,6 +18,8 @@ function App() {
   const [activeMenuItem, setActiveMenuItem] = useState("Dashboard");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [allActivities, setAllActivities] = useState([]);
+  const [selectedCustomerActivities, setSelectedCustomerActivities] = useState([]);
 
   const translations = {
     tr: {
@@ -58,6 +62,9 @@ function App() {
         city: "Şehir",
         businessType: "İş Türü",
         lastContact: "Son Temas",
+        lastVisitDate: "Son Randevu",
+        nextAppointmentDate: "Sonraki Randevu",
+        serviceType: "Alınan Hizmet",
         notes: "Notlar",
         save: "Notu Kaydet",
         saving: "Kaydediliyor...",
@@ -66,6 +73,10 @@ function App() {
         typeCall: "Arama",
         typeVisit: "Ziyaret",
         typeNote: "Not",
+        activityType: "Aktivite Türü",
+        activityDate: "Aktivite Tarihi",
+        activityNote: "Aktivite Notu",
+        addActivity: "Aktivite Ekle",
       },
       form: {
         title: "Müşteri Bilgileri",
@@ -83,10 +94,16 @@ function App() {
         searchPlaceholder: "İsim veya telefon ile ara",
         statusAll: "Tüm Durumlar",
       },
-      todosTitle: "Bugün Yapılacaklar",
-      noTodos: "Bugün aranacak müşteri yok.",
+      todayAppointmentsTitle: "Bugün Randevusu Olanlar",
+      noTodayAppointments: "Bugün randevu görünmüyor.",
+      winbackTitle: "Geri Kazanılacak Müşteriler",
+      noWinback: "30+ gün gelmeyen müşteri yok.",
+      atRisk: "Kaybedilmek Üzere",
+      activitiesMenuTitle: "Aktiviteler",
+      noActivities: "Henüz aktivite yok.",
       todayContacted: "Bugün iletişim kuruldu",
       daysNotContacted: "gündür aranmamış",
+      daysNotVisited: "gündür gelmedi",
       comingSoon: "Yakında",
     },
     en: {
@@ -129,6 +146,9 @@ function App() {
         city: "City",
         businessType: "Business",
         lastContact: "Last Contact",
+        lastVisitDate: "Last Visit",
+        nextAppointmentDate: "Next Appointment",
+        serviceType: "Service Type",
         notes: "Notes",
         save: "Save Note",
         saving: "Saving...",
@@ -137,6 +157,10 @@ function App() {
         typeCall: "Call",
         typeVisit: "Visit",
         typeNote: "Note",
+        activityType: "Activity Type",
+        activityDate: "Activity Date",
+        activityNote: "Activity Note",
+        addActivity: "Add Activity",
       },
       form: {
         title: "Customer Information",
@@ -154,10 +178,16 @@ function App() {
         searchPlaceholder: "Search by name or phone",
         statusAll: "All Statuses",
       },
-      todosTitle: "Today Tasks",
-      noTodos: "No customers to call today.",
+      todayAppointmentsTitle: "Today Appointments",
+      noTodayAppointments: "No appointment for today.",
+      winbackTitle: "Win-Back Customers",
+      noWinback: "No customer absent for 30+ days.",
+      atRisk: "At Risk",
+      activitiesMenuTitle: "Activities",
+      noActivities: "No activity yet.",
       todayContacted: "Contacted today",
       daysNotContacted: "days without contact",
+      daysNotVisited: "days absent",
       comingSoon: "Coming Soon",
     },
   };
@@ -171,6 +201,33 @@ function App() {
     const days = Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
     if (days <= 0) return t.todayContacted;
     return `${days} ${t.daysNotContacted}`;
+  }
+
+  function formatDateTime(value) {
+    if (!value) return "-";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "-";
+    return date.toLocaleString(locale === "tr" ? "tr-TR" : "en-US", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+  }
+
+  function getDaysSince(value) {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    return Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
+  }
+
+  function mapActivity(item) {
+    return {
+      id: item.id,
+      type: item.type,
+      note: item.note,
+      activityDate: formatDateTime(item.activity_date),
+      customerName: item.customer_name || "-",
+    };
   }
 
   async function loadCustomers() {
@@ -187,24 +244,35 @@ function App() {
       lastContactedAt: item.last_contacted_at,
       lastContactText: formatDaysWithoutContact(item.last_contacted_at),
       lastContact: formatDaysWithoutContact(item.last_contacted_at),
+      lastVisitDateRaw: item.last_visit_date,
+      nextAppointmentDateRaw: item.next_appointment_date,
+      lastVisitDate: formatDateTime(item.last_visit_date),
+      nextAppointmentDate: formatDateTime(item.next_appointment_date),
+      serviceType: item.service_type || "-",
     }));
 
     setCustomers(mapped);
     if (!selectedCustomer && mapped.length > 0) {
       setSelectedCustomer(mapped[0]);
+      await loadActivitiesForCustomer(mapped[0].id);
     }
   }
 
   useEffect(() => {
     loadCustomers();
+    loadAllActivities();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const activities = [
-    { id: "1", type: "call", note: "Takip görüşmesi tamamlandı.", date: "26.05.2026" },
-    { id: "2", type: "visit", note: "Ürün sunumu yapıldı.", date: "24.05.2026" },
-    { id: "3", type: "note", note: "Fiyat listesi gönderilecek.", date: "20.05.2026" },
-  ];
+  async function loadAllActivities() {
+    const data = await getActivities();
+    setAllActivities(data.map(mapActivity));
+  }
+
+  async function loadActivitiesForCustomer(customerId) {
+    const data = await getCustomerActivities(customerId);
+    setSelectedCustomerActivities(data.map(mapActivity));
+  }
 
   const filteredCustomers = useMemo(() => {
     return customers.filter((c) => {
@@ -216,15 +284,29 @@ function App() {
     });
   }, [customers, searchTerm, statusFilter]);
 
-  const todoCustomers = useMemo(() => {
+  const winbackCustomers = useMemo(() => {
     return customers
       .filter((c) => c.status !== "lost")
       .filter((c) => {
-        if (!c.lastContactedAt) return true;
-        const d = new Date(c.lastContactedAt);
-        if (Number.isNaN(d.getTime())) return true;
-        const days = Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
-        return days >= 3;
+        const days = getDaysSince(c.lastVisitDateRaw);
+        if (days === null) return true;
+        return days >= 30;
+      })
+      .slice(0, 5);
+  }, [customers]);
+
+  const todayAppointments = useMemo(() => {
+    const now = new Date();
+    return customers
+      .filter((c) => c.nextAppointmentDateRaw)
+      .filter((c) => {
+        const d = new Date(c.nextAppointmentDateRaw);
+        if (Number.isNaN(d.getTime())) return false;
+        return (
+          d.getFullYear() === now.getFullYear() &&
+          d.getMonth() === now.getMonth() &&
+          d.getDate() === now.getDate()
+        );
       })
       .slice(0, 5);
   }, [customers]);
@@ -247,6 +329,24 @@ function App() {
     await updateCustomer(customerId, { notes });
     await loadCustomers();
     setSelectedCustomer((prev) => (prev ? { ...prev, notes } : prev));
+  }
+
+  async function handleSelectCustomer(customer) {
+    setSelectedCustomer(customer);
+    if (customer?.id) {
+      await loadActivitiesForCustomer(customer.id);
+    }
+  }
+
+  async function handleAddActivity(customerId, payload) {
+    await createActivity({
+      customerId,
+      type: payload.type,
+      note: payload.note,
+      activityDate: payload.activityDate,
+    });
+    await loadActivitiesForCustomer(customerId);
+    await loadAllActivities();
   }
 
   return (
@@ -297,21 +397,39 @@ function App() {
 
               <CustomersTable
                 customers={filteredCustomers}
-                onSelectCustomer={(customer) => setSelectedCustomer(customer)}
+                onSelectCustomer={handleSelectCustomer}
                 texts={t.table}
               />
 
               <section className="customers-panel">
                 <div className="panel-header">
-                  <h3 className="panel-title">{t.todosTitle}</h3>
+                  <h3 className="panel-title">{t.todayAppointmentsTitle}</h3>
                 </div>
-                {todoCustomers.length === 0 ? (
-                  <p>{t.noTodos}</p>
+                {todayAppointments.length === 0 ? (
+                  <p>{t.noTodayAppointments}</p>
                 ) : (
                   <ul className="todo-list">
-                    {todoCustomers.map((c) => (
+                    {todayAppointments.map((c) => (
                       <li key={c.id}>
-                        <strong>{c.name}</strong> - {c.lastContactText}
+                        <strong>{c.name}</strong> - {c.nextAppointmentDate}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+
+              <section className="customers-panel">
+                <div className="panel-header">
+                  <h3 className="panel-title">{t.winbackTitle}</h3>
+                </div>
+                {winbackCustomers.length === 0 ? (
+                  <p>{t.noWinback}</p>
+                ) : (
+                  <ul className="todo-list">
+                    {winbackCustomers.map((c) => (
+                      <li key={c.id}>
+                        <strong>{c.name}</strong> - {getDaysSince(c.lastVisitDateRaw) ?? 30} {t.daysNotVisited}
+                        <span className="risk-chip">{t.atRisk}</span>
                       </li>
                     ))}
                   </ul>
@@ -334,6 +452,7 @@ function App() {
                 activities={activities}
                 texts={t.details}
                 onSaveNotes={handleSaveCustomerNotes}
+                onAddActivity={handleAddActivity}
               />
               {isFormOpen && (
                 <CustomerForm
@@ -347,7 +466,15 @@ function App() {
             </>
           )}
 
-          {activeMenuItem !== t.sidebarMenu[0] && (
+          {activeMenuItem === t.sidebarMenu[2] && (
+            <ActivitiesPanel
+              activities={allActivities}
+              title={t.activitiesMenuTitle}
+              emptyText={t.noActivities}
+            />
+          )}
+
+          {activeMenuItem !== t.sidebarMenu[0] && activeMenuItem !== t.sidebarMenu[2] && (
             <section className="customers-panel">
               <div className="panel-header">
                 <h3 className="panel-title">{t.comingSoon}</h3>

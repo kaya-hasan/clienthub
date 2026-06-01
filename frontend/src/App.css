@@ -387,6 +387,21 @@
 
 .todo-list li {
   margin: 8px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.risk-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: #fce2e2;
+  color: #a12626;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 3px 8px;
 }
 
 .notes-editor label {
@@ -399,6 +414,15 @@
   border-radius: var(--radius-md);
   padding: 10px;
   font-size: 0.9rem;
+}
+
+.notes-editor select,
+.notes-editor input {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 10px;
+  font-size: 0.9rem;
+  background: var(--surface);
 }
 
 .notes-editor .primary-btn {

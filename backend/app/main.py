@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.customers import router as CustomerRouter
+from app.api.activities import router as ActivityRouter
 
 
 app = FastAPI(title=settings.app_name, debug=settings.debug)
@@ -18,6 +19,8 @@ app.add_middleware(
 )
 
 app.include_router(CustomerRouter)
+app.include_router(ActivityRouter)
+
 
 @app.get("/")
 def read_root() -> dict[str, str]:

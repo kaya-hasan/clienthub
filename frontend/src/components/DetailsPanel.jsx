@@ -1,13 +1,19 @@
 import { useEffect, useState } from "react";
 
-function DetailsPanel({ selectedCustomer, activities, texts, onSaveNotes }) {
+function DetailsPanel({ selectedCustomer, activities, texts, onSaveNotes, onAddActivity }) {
   const typeLabel = {
     call: texts.typeCall,
     visit: texts.typeVisit,
     note: texts.typeNote,
+
   };
   const [notesDraft, setNotesDraft] = useState(selectedCustomer.notes || "");
   const [isSaving, setIsSaving] = useState(false);
+  const [activityDraft, setActivityDraft] = useState({
+    type: "call",
+    note: "",
+    activityDate: "",
+  });
 
   useEffect(() => {
     setNotesDraft(selectedCustomer.notes || "");
@@ -24,6 +30,13 @@ function DetailsPanel({ selectedCustomer, activities, texts, onSaveNotes }) {
     } finally {
       setIsSaving(false);
     }
+  }
+
+  async function handleAddActivity() {
+    if (!selectedCustomer?.id || !onAddActivity) return;
+    if (!activityDraft.note || !activityDraft.activityDate) return;
+    await onAddActivity(selectedCustomer.id, activityDraft);
+    setActivityDraft({ type: "call", note: "", activityDate: "" });
   }
 
   return (
@@ -55,6 +68,18 @@ function DetailsPanel({ selectedCustomer, activities, texts, onSaveNotes }) {
             <strong>{texts.lastContact}</strong>
             <span>{selectedCustomer.lastContact}</span>
           </li>
+          <li>
+            <strong>{texts.lastVisitDate}</strong>
+            <span>{selectedCustomer.lastVisitDate || "-"}</span>
+          </li>
+          <li>
+            <strong>{texts.nextAppointmentDate}</strong>
+            <span>{selectedCustomer.nextAppointmentDate || "-"}</span>
+          </li>
+          <li>
+            <strong>{texts.serviceType}</strong>
+            <span>{selectedCustomer.serviceType || "-"}</span>
+          </li>
         </ul>
         <div className="notes-editor">
           <label>{texts.notes}</label>
@@ -72,6 +97,32 @@ function DetailsPanel({ selectedCustomer, activities, texts, onSaveNotes }) {
             {isSaving ? texts.saving : texts.save}
           </button>
         </div>
+        <div className="notes-editor">
+          <label>{texts.activityType}</label>
+          <select
+            value={activityDraft.type}
+            onChange={(e) => setActivityDraft((prev) => ({ ...prev, type: e.target.value }))}
+          >
+            <option value="call">{texts.typeCall}</option>
+            <option value="visit">{texts.typeVisit}</option>
+            <option value="note">{texts.typeNote}</option>
+          </select>
+          <label>{texts.activityDate}</label>
+          <input
+            type="datetime-local"
+            value={activityDraft.activityDate}
+            onChange={(e) => setActivityDraft((prev) => ({ ...prev, activityDate: e.target.value }))}
+          />
+          <label>{texts.activityNote}</label>
+          <textarea
+            rows="3"
+            value={activityDraft.note}
+            onChange={(e) => setActivityDraft((prev) => ({ ...prev, note: e.target.value }))}
+          />
+          <button type="button" className="primary-btn" onClick={handleAddActivity}>
+            {texts.addActivity}
+          </button>
+        </div>
       </article>
       <article className="detail-card">
         <h3>{texts.activityTitle}</h3>
@@ -82,7 +133,7 @@ function DetailsPanel({ selectedCustomer, activities, texts, onSaveNotes }) {
               <div className="timeline-content">
                 <p className="timeline-note">{activity.note}</p>
                 <small className="timeline-date">
-                  {activity.date} • {typeLabel[activity.type] || activity.type}
+                  {activity.activityDate} • {typeLabel[activity.type] || activity.type}
                 </small>
               </div>
             </li>
