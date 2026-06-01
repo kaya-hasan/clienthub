@@ -4,6 +4,7 @@ from app.db.deps import get_db
 from app.schemas.activity import ActivityCreate, ActivityOut
 from app.services.activity_service import (
     create_activity as _create_activity,
+    delete_activity as _delete_activity,
     list_activities as _list_activities,
     list_customer_activities as _list_customer_activities,
 )
@@ -37,3 +38,11 @@ def get_customer_activities(
     db: Session = Depends(get_db),
 ):
     return _list_customer_activities(db, customer_id, skip, limit)
+
+
+@router.delete("/{activity_id}")
+def remove_activity(activity_id: int, db: Session = Depends(get_db)):
+    result = _delete_activity(db, activity_id)
+    if not result["success"]:
+        raise HTTPException(status_code=404, detail="Activity not found")
+    return {"detail": "Activity deleted"}

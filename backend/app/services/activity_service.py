@@ -61,3 +61,12 @@ def list_customer_activities(db: Session, customer_id: int, skip: int = 0, limit
         }
         for activity, customer_name in rows
     ]
+
+
+def delete_activity(db: Session, activity_id: int):
+    activity = db.query(Activity).filter(Activity.id == activity_id).first()
+    if activity is None:
+        return {"success": False, "message": "Activity not found"}
+    db.delete(activity)
+    db.commit()
+    return {"success": True}

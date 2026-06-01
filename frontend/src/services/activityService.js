@@ -35,3 +35,14 @@ export async function createActivity(payload) {
 
   return response.json();
 }
+
+export async function deleteActivity(activityId) {
+  const response = await fetch(`http://127.0.0.1:8000/activities/${activityId}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.detail || "Aktivite silinemedi");
+  }
+  return response.json();
+}

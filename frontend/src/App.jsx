@@ -8,7 +8,7 @@ import CustomerForm from "./components/CustomerForm";
 import ActivitiesPanel from "./components/ActivitiesPanel";
 import { useEffect, useMemo, useState } from "react";
 import { getCustomers, updateCustomer } from "./services/customerService";
-import { createActivity, getActivities, getCustomerActivities } from "./services/activityService";
+import { createActivity, deleteActivity, getActivities, getCustomerActivities } from "./services/activityService";
 
 function App() {
   const [locale, setLocale] = useState("tr");
@@ -20,6 +20,7 @@ function App() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [allActivities, setAllActivities] = useState([]);
   const [selectedCustomerActivities, setSelectedCustomerActivities] = useState([]);
+  const [undoAction, setUndoAction] = useState(null);
 
   const translations = {
     tr: {
@@ -77,6 +78,14 @@ function App() {
         activityDate: "Aktivite Tarihi",
         activityNote: "Aktivite Notu",
         addActivity: "Aktivite Ekle",
+        quickActions: "Hızlı Aksiyonlar",
+        quickCalled: "Arandı",
+        quickMessaged: "Mesaj Gönderildi",
+        quickBooked: "Randevu Alındı",
+        oneClickAppointment: "Tek Tık Randevu",
+        saveAppointment: "Randevuyu Kaydet",
+        undoPrompt: "Hızlı aksiyon kaydedildi.",
+        undo: "Geri Al",
       },
       form: {
         title: "Müşteri Bilgileri",
@@ -106,6 +115,10 @@ function App() {
       reportTodayAppointments: "Bugünkü Randevular",
       reportWinback: "Geri Kazanılacak",
       reportLostRate: "Kaybedilen Oranı",
+      segmentTitle: "Akıllı Segmentasyon",
+      segmentRed: "30+ Gün Gelmeyenler",
+      segmentYellow: "7-30 Gün Arası",
+      segmentGreen: "Aktif Müşteriler",
       todayContacted: "Bugün iletişim kuruldu",
       daysNotContacted: "gündür aranmamış",
       daysNotVisited: "gündür gelmedi",
@@ -166,6 +179,14 @@ function App() {
         activityDate: "Activity Date",
         activityNote: "Activity Note",
         addActivity: "Add Activity",
+        quickActions: "Quick Actions",
+        quickCalled: "Called",
+        quickMessaged: "Message Sent",
+        quickBooked: "Appointment Booked",
+        oneClickAppointment: "One-Click Appointment",
+        saveAppointment: "Save Appointment",
+        undoPrompt: "Quick action saved.",
+        undo: "Undo",
       },
       form: {
         title: "Customer Information",
@@ -195,6 +216,10 @@ function App() {
       reportTodayAppointments: "Today Appointments",
       reportWinback: "Win-Back Pool",
       reportLostRate: "Lost Rate",
+      segmentTitle: "Smart Segmentation",
+      segmentRed: "30+ Days Absent",
+      segmentYellow: "7-30 Days",
+      segmentGreen: "Active Customers",
       todayContacted: "Contacted today",
       daysNotContacted: "days without contact",
       daysNotVisited: "days absent",
@@ -360,10 +385,77 @@ function App() {
     await loadAllActivities();
   }
 
+  async function handleQuickAction(customerId, actionKey) {
+    const now = new Date().toISOString();
+    const currentCustomer = customers.find((c) => c.id === customerId);
+    const previousLastContactedAt = currentCustomer?.lastContactedAt || null;
+    const actionMap = {
+      called: { type: "call", note: locale === "tr" ? "Müşteri arandı." : "Customer was called." },
+      messaged: { type: "message", note: locale === "tr" ? "Müşteriye mesaj gönderildi." : "Message sent to customer." },
+      booked: { type: "appointment", note: locale === "tr" ? "Randevu alındı." : "Appointment booked." },
+    };
+    const action = actionMap[actionKey];
+    if (!action) return;
+    const created = await createActivity({ customerId, type: action.type, note: action.note, activityDate: now });
+    await updateCustomer(customerId, { lastContactedAt: now });
+    setUndoAction({
+      customerId,
+      activityId: created.id,
+      previousLastContactedAt,
+    });
+    await loadCustomers();
+    await loadActivitiesForCustomer(customerId);
+    await loadAllActivities();
+  }
+
+  async function handleUndoQuickAction() {
+    if (!undoAction) return;
+    await deleteActivity(undoAction.activityId);
+    await updateCustomer(undoAction.customerId, {
+      lastContactedAt: undoAction.previousLastContactedAt,
+    });
+    await loadCustomers();
+    await loadActivitiesForCustomer(undoAction.customerId);
+    await loadAllActivities();
+    setUndoAction(null);
+  }
+
+  async function handleQuickAppointment(customerId, appointmentDate) {
+    await updateCustomer(customerId, {
+      nextAppointmentDate: appointmentDate,
+      lastContactedAt: new Date().toISOString(),
+    });
+    await createActivity({
+      customerId,
+      type: "appointment",
+      note: locale === "tr" ? "Randevu tarihi oluşturuldu." : "Appointment date created.",
+      activityDate: appointmentDate,
+    });
+    await loadCustomers();
+    await loadActivitiesForCustomer(customerId);
+    await loadAllActivities();
+  }
+
   const lostRate = useMemo(() => {
     if (customers.length === 0) return "0%";
     const lost = customers.filter((c) => c.status === "lost").length;
     return `${Math.round((lost / customers.length) * 100)}%`;
+  }, [customers]);
+
+  const segmentSummary = useMemo(() => {
+    const red = customers.filter((c) => {
+      const days = getDaysSince(c.lastVisitDateRaw);
+      return days === null || days >= 30;
+    }).length;
+    const yellow = customers.filter((c) => {
+      const days = getDaysSince(c.lastVisitDateRaw);
+      return days !== null && days >= 7 && days < 30;
+    }).length;
+    const green = customers.filter((c) => {
+      const days = getDaysSince(c.lastVisitDateRaw);
+      return days !== null && days < 7;
+    }).length;
+    return { red, yellow, green };
   }, [customers]);
 
   return (
@@ -424,6 +516,25 @@ function App() {
                     ))}
                   </ul>
                 )}
+              </section>
+              <section className="customers-panel">
+                <div className="panel-header">
+                  <h3 className="panel-title">{t.segmentTitle}</h3>
+                </div>
+                <div className="segment-grid">
+                  <article className="segment-card segment-red">
+                    <strong>{t.segmentRed}</strong>
+                    <span>{segmentSummary.red}</span>
+                  </article>
+                  <article className="segment-card segment-yellow">
+                    <strong>{t.segmentYellow}</strong>
+                    <span>{segmentSummary.yellow}</span>
+                  </article>
+                  <article className="segment-card segment-green">
+                    <strong>{t.segmentGreen}</strong>
+                    <span>{segmentSummary.green}</span>
+                  </article>
+                </div>
               </section>
             </>
           )}
@@ -491,6 +602,10 @@ function App() {
                 texts={t.details}
                 onSaveNotes={handleSaveCustomerNotes}
                 onAddActivity={handleAddActivity}
+                onQuickAction={handleQuickAction}
+                onQuickAppointment={handleQuickAppointment}
+                undoAction={undoAction}
+                onUndoQuickAction={handleUndoQuickAction}
               />
               <ActivitiesPanel
                 activities={allActivities}

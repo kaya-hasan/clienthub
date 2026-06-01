@@ -1,11 +1,22 @@
 import { useEffect, useState } from "react";
 
-function DetailsPanel({ selectedCustomer, activities, texts, onSaveNotes, onAddActivity }) {
+function DetailsPanel({
+  selectedCustomer,
+  activities,
+  texts,
+  onSaveNotes,
+  onAddActivity,
+  onQuickAction,
+  onQuickAppointment,
+  undoAction,
+  onUndoQuickAction,
+}) {
   const typeLabel = {
     call: texts.typeCall,
     visit: texts.typeVisit,
     note: texts.typeNote,
-
+    message: texts.quickMessaged,
+    appointment: texts.quickBooked,
   };
   const [notesDraft, setNotesDraft] = useState(selectedCustomer.notes || "");
   const [isSaving, setIsSaving] = useState(false);
@@ -14,6 +25,7 @@ function DetailsPanel({ selectedCustomer, activities, texts, onSaveNotes, onAddA
     note: "",
     activityDate: "",
   });
+  const [appointmentDraft, setAppointmentDraft] = useState("");
 
   useEffect(() => {
     setNotesDraft(selectedCustomer.notes || "");
@@ -37,6 +49,17 @@ function DetailsPanel({ selectedCustomer, activities, texts, onSaveNotes, onAddA
     if (!activityDraft.note || !activityDraft.activityDate) return;
     await onAddActivity(selectedCustomer.id, activityDraft);
     setActivityDraft({ type: "call", note: "", activityDate: "" });
+  }
+
+  async function handleQuickAction(actionKey) {
+    if (!selectedCustomer?.id || !onQuickAction) return;
+    await onQuickAction(selectedCustomer.id, actionKey);
+  }
+
+  async function handleQuickAppointment() {
+    if (!selectedCustomer?.id || !onQuickAppointment || !appointmentDraft) return;
+    await onQuickAppointment(selectedCustomer.id, appointmentDraft);
+    setAppointmentDraft("");
   }
 
   return (
@@ -95,6 +118,39 @@ function DetailsPanel({ selectedCustomer, activities, texts, onSaveNotes, onAddA
             disabled={isSaving || !selectedCustomer?.id}
           >
             {isSaving ? texts.saving : texts.save}
+          </button>
+        </div>
+        <div className="notes-editor">
+          <label>{texts.quickActions}</label>
+          {undoAction && (
+            <div className="undo-inline">
+              <span>{texts.undoPrompt}</span>
+              <button type="button" className="secondary-btn" onClick={onUndoQuickAction}>
+                {texts.undo}
+              </button>
+            </div>
+          )}
+          <div className="quick-action-row">
+            <button type="button" className="secondary-btn" onClick={() => handleQuickAction("called")}>
+              {texts.quickCalled}
+            </button>
+            <button type="button" className="secondary-btn" onClick={() => handleQuickAction("messaged")}>
+              {texts.quickMessaged}
+            </button>
+            <button type="button" className="secondary-btn" onClick={() => handleQuickAction("booked")}>
+              {texts.quickBooked}
+            </button>
+          </div>
+        </div>
+        <div className="notes-editor">
+          <label>{texts.oneClickAppointment}</label>
+          <input
+            type="datetime-local"
+            value={appointmentDraft}
+            onChange={(e) => setAppointmentDraft(e.target.value)}
+          />
+          <button type="button" className="primary-btn" onClick={handleQuickAppointment}>
+            {texts.saveAppointment}
           </button>
         </div>
         <div className="notes-editor">

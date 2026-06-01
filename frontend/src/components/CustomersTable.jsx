@@ -42,6 +42,22 @@ function CustomersTable({ customers, onSelectCustomer, texts }) {
           </tbody>
         </table>
       </div>
+      <div className="mobile-customer-cards">
+        {customers.map((c) => (
+          <article key={c.id} className="customer-mobile-card" onClick={() => onSelectCustomer(c)}>
+            <div className="customer-mobile-head">
+              <strong>{c.name}</strong>
+              <span className={`status-badge tone-${c.status}`}>
+                {statusLabel[c.status] || c.status}
+              </span>
+            </div>
+            <p>{c.businessType}</p>
+            <p>{c.phone}</p>
+            <p>{c.city}</p>
+            <small>{c.lastContactText}</small>
+          </article>
+        ))}
+      </div>
     </section>
   )
 }
