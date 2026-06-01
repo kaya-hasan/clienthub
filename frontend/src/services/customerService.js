@@ -8,6 +8,9 @@ export async function createCustomer(payload) {
     notes: payload.notes || null,
     status: payload.status || "lead",
     last_contacted_at: payload.lastContactedAt || null,
+    last_visit_date: payload.lastVisitDate || null,
+    next_appointment_date: payload.nextAppointmentDate || null,
+    service_type: payload.serviceType || null,
   };
 
   const response = await fetch("http://127.0.0.1:8000/customers/", {
@@ -51,6 +54,15 @@ export async function updateCustomer(customerId, payload) {
     ...(payload.status !== undefined ? { status: payload.status } : {}),
     ...(payload.lastContactedAt !== undefined
       ? { last_contacted_at: payload.lastContactedAt }
+      : {}),
+    ...(payload.lastVisitDate !== undefined
+      ? { last_visit_date: payload.lastVisitDate }
+      : {}),
+    ...(payload.nextAppointmentDate !== undefined
+      ? { next_appointment_date: payload.nextAppointmentDate }
+      : {}),
+    ...(payload.serviceType !== undefined
+      ? { service_type: payload.serviceType }
       : {}),
   };
 

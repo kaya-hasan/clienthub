@@ -12,6 +12,10 @@ class CustomerBase(BaseModel):
   city: Optional[str] = Field(description="City of the customer", default=None)
   status: Optional[str] = Field(description="Status of the customer", default="lead")
   last_contacted_at: Optional[datetime] = Field(description="Date and time of the last contact with the customer", default=None)
+  last_visit_date: Optional[datetime] = None
+  next_appointment_date: Optional[datetime] = None
+  service_type: Optional[str] = None
+  
 
 
 class CustomerCreate(CustomerBase):
@@ -23,6 +27,9 @@ class CustomerOut(CustomerBase):
   updated_at: datetime
   status: str
   last_contacted_at: Optional[datetime] = None
+  last_visit_date: Optional[datetime] = None
+  next_appointment_date: Optional[datetime] = None
+  service_type: Optional[str] = None
   class Config:
     from_attributes = True
 
@@ -35,5 +42,8 @@ class CustomerUpdate(CustomerBase):
   notes: Optional[str] = Field(default=None)
   business_type: Optional[str] = Field(default=None)
   city: Optional[str] = Field(default=None)
-  status: Optional[str] = Field(default="lead")
+  status: Optional[str] = Field(default=None)
   last_contacted_at: Optional[datetime] = Field(default=None)
+  last_visit_date: Optional[datetime] = None
+  next_appointment_date: Optional[datetime] = None
+  service_type: Optional[str] = None

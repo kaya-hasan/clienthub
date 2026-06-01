@@ -14,5 +14,7 @@ class Customer(Base):
     updated_at = Column(DateTime, index=True, default=func.now(), onupdate=func.now())
     status = Column(String, default="lead", index=True, nullable=False)
     last_contacted_at = Column(DateTime, nullable=True, index=True)
-
+    last_visit_date = Column(DateTime, index=True, nullable=True)
+    next_appointment_date = Column(DateTime, index=True, nullable=True)
+    service_type = Column(String, index=True, nullable=True)
 

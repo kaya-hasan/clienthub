@@ -101,6 +101,11 @@ function App() {
       atRisk: "Kaybedilmek Üzere",
       activitiesMenuTitle: "Aktiviteler",
       noActivities: "Henüz aktivite yok.",
+      reportsTitle: "Rapor Özeti",
+      reportTotalActivities: "Toplam Aktivite",
+      reportTodayAppointments: "Bugünkü Randevular",
+      reportWinback: "Geri Kazanılacak",
+      reportLostRate: "Kaybedilen Oranı",
       todayContacted: "Bugün iletişim kuruldu",
       daysNotContacted: "gündür aranmamış",
       daysNotVisited: "gündür gelmedi",
@@ -185,6 +190,11 @@ function App() {
       atRisk: "At Risk",
       activitiesMenuTitle: "Activities",
       noActivities: "No activity yet.",
+      reportsTitle: "Reports Summary",
+      reportTotalActivities: "Total Activities",
+      reportTodayAppointments: "Today Appointments",
+      reportWinback: "Win-Back Pool",
+      reportLostRate: "Lost Rate",
       todayContacted: "Contacted today",
       daysNotContacted: "days without contact",
       daysNotVisited: "days absent",
@@ -335,6 +345,7 @@ function App() {
     setSelectedCustomer(customer);
     if (customer?.id) {
       await loadActivitiesForCustomer(customer.id);
+      setActiveMenuItem(t.sidebarMenu[2]);
     }
   }
 
@@ -348,6 +359,12 @@ function App() {
     await loadActivitiesForCustomer(customerId);
     await loadAllActivities();
   }
+
+  const lostRate = useMemo(() => {
+    if (customers.length === 0) return "0%";
+    const lost = customers.filter((c) => c.status === "lost").length;
+    return `${Math.round((lost / customers.length) * 100)}%`;
+  }, [customers]);
 
   return (
     <div className="app-shell">
@@ -373,33 +390,6 @@ function App() {
           {activeMenuItem === t.sidebarMenu[0] && (
             <>
               <StatsGrid stats={stats} />
-
-              <section className="customers-panel filters-panel">
-                <input
-                  className="filter-input"
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder={t.filters.searchPlaceholder}
-                />
-                <select
-                  className="filter-select"
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                >
-                  <option value="all">{t.filters.statusAll}</option>
-                  <option value="lead">{t.table.statusLead}</option>
-                  <option value="contacted">{t.table.statusContacted}</option>
-                  <option value="customer">{t.table.statusCustomer}</option>
-                  <option value="lost">{t.table.statusLost}</option>
-                </select>
-              </section>
-
-              <CustomersTable
-                customers={filteredCustomers}
-                onSelectCustomer={handleSelectCustomer}
-                texts={t.table}
-              />
 
               <section className="customers-panel">
                 <div className="panel-header">
@@ -435,25 +425,38 @@ function App() {
                   </ul>
                 )}
               </section>
+            </>
+          )}
 
-              <DetailsPanel
-                selectedCustomer={
-                  selectedCustomer || {
-                    id: null,
-                    name: "-",
-                    phone: "-",
-                    email: "-",
-                    city: "-",
-                    businessType: "-",
-                    lastContact: "-",
-                    notes: "",
-                  }
-                }
-                activities={activities}
-                texts={t.details}
-                onSaveNotes={handleSaveCustomerNotes}
-                onAddActivity={handleAddActivity}
+          {activeMenuItem === t.sidebarMenu[1] && (
+            <>
+              <section className="customers-panel filters-panel">
+                <input
+                  className="filter-input"
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder={t.filters.searchPlaceholder}
+                />
+                <select
+                  className="filter-select"
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                >
+                  <option value="all">{t.filters.statusAll}</option>
+                  <option value="lead">{t.table.statusLead}</option>
+                  <option value="contacted">{t.table.statusContacted}</option>
+                  <option value="customer">{t.table.statusCustomer}</option>
+                  <option value="lost">{t.table.statusLost}</option>
+                </select>
+              </section>
+
+              <CustomersTable
+                customers={filteredCustomers}
+                onSelectCustomer={handleSelectCustomer}
+                texts={t.table}
               />
+
               {isFormOpen && (
                 <CustomerForm
                   texts={t.form}
@@ -467,14 +470,66 @@ function App() {
           )}
 
           {activeMenuItem === t.sidebarMenu[2] && (
-            <ActivitiesPanel
-              activities={allActivities}
-              title={t.activitiesMenuTitle}
-              emptyText={t.noActivities}
-            />
+            <>
+              <DetailsPanel
+                selectedCustomer={
+                  selectedCustomer || {
+                    id: null,
+                    name: "-",
+                    phone: "-",
+                    email: "-",
+                    city: "-",
+                    businessType: "-",
+                    lastContact: "-",
+                    notes: "",
+                    lastVisitDate: "-",
+                    nextAppointmentDate: "-",
+                    serviceType: "-",
+                  }
+                }
+                activities={selectedCustomerActivities}
+                texts={t.details}
+                onSaveNotes={handleSaveCustomerNotes}
+                onAddActivity={handleAddActivity}
+              />
+              <ActivitiesPanel
+                activities={allActivities}
+                title={t.activitiesMenuTitle}
+                emptyText={t.noActivities}
+              />
+            </>
           )}
 
-          {activeMenuItem !== t.sidebarMenu[0] && activeMenuItem !== t.sidebarMenu[2] && (
+          {activeMenuItem === t.sidebarMenu[3] && (
+            <section className="customers-panel">
+              <div className="panel-header">
+                <h3 className="panel-title">{t.reportsTitle}</h3>
+              </div>
+              <div className="cards-grid">
+                <article className="stat-card">
+                  <p className="stat-card-title">{t.reportTotalActivities}</p>
+                  <p className="stat-card-value">{allActivities.length}</p>
+                </article>
+                <article className="stat-card">
+                  <p className="stat-card-title">{t.reportTodayAppointments}</p>
+                  <p className="stat-card-value">{todayAppointments.length}</p>
+                </article>
+                <article className="stat-card">
+                  <p className="stat-card-title">{t.reportWinback}</p>
+                  <p className="stat-card-value">{winbackCustomers.length}</p>
+                </article>
+                <article className="stat-card">
+                  <p className="stat-card-title">{t.reportLostRate}</p>
+                  <p className="stat-card-value">{lostRate}</p>
+                </article>
+              </div>
+            </section>
+          )}
+
+          {activeMenuItem !== t.sidebarMenu[0] &&
+            activeMenuItem !== t.sidebarMenu[1] &&
+            activeMenuItem !== t.sidebarMenu[2] &&
+            activeMenuItem !== t.sidebarMenu[3] && (
             <section className="customers-panel">
               <div className="panel-header">
                 <h3 className="panel-title">{t.comingSoon}</h3>
