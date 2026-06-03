@@ -9,6 +9,7 @@ venv/
 
 # FastAPI local env/data
 backend/.env
+backend/.env.example
 backend/crm.db
 
 # Node

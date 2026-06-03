@@ -21,14 +21,17 @@ pip install -r requirements.txt
 
 ### Backend `.env` Dosyası
 
-`backend/.env` dosyası oluştur:
+`backend/.env` dosyasını oluşturup aşağıdaki değişkenleri tanımla:
 
-```env
-APP_NAME=CRM App API
-ENVIRONMENT=dev
-DEBUG=true
-DATABASE_URL=sqlite:///./crm.db
-```
+- `APP_NAME=ClientHub API`
+- `ENVIRONMENT=development`
+- `DEBUG=false`
+- `DATABASE_URL=sqlite:///./crm.db`
+- `SECRET_KEY=replace-with-a-long-random-secret`
+- `ACCESS_TOKEN_EXPIRE_MINUTES=480`
+- `DEFAULT_ADMIN_EMAIL=admin@example.test`
+- `DEFAULT_ADMIN_PASSWORD=replace-with-a-strong-password`
+- `CORS_ORIGINS=["http://localhost:5173","http://127.0.0.1:5173"]`
 
 ### Geliştirme Sunucusunu Başlatma
 
@@ -49,6 +52,14 @@ alembic revision --autogenerate -m "migration açıklaması"
 alembic upgrade head
 
 # Mevcut migration durumunu görüntüle
+alembic current
+```
+
+Gerekirse güvenlik migration'larını uygulamak için doğrudan:
+
+```bash
+cd backend
+alembic upgrade head
 alembic current
 ```
 
