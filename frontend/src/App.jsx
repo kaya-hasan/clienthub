@@ -1,17 +1,35 @@
+import { useEffect, useMemo, useState } from "react";
 import "./App.css";
-import Sidebar from "./components/Sidebar";
-import TopBar from "./components/TopBar";
-import StatsGrid from "./components/StatsGrid";
+import ActivitiesPanel from "./components/ActivitiesPanel";
+import CustomerForm from "./components/CustomerForm";
 import CustomersTable from "./components/CustomersTable";
 import DetailsPanel from "./components/DetailsPanel";
-import CustomerForm from "./components/CustomerForm";
-import ActivitiesPanel from "./components/ActivitiesPanel";
-import { useEffect, useMemo, useState } from "react";
-import { getCustomers, updateCustomer } from "./services/customerService";
-import { createActivity, deleteActivity, getActivities, getCustomerActivities } from "./services/activityService";
+import LoginForm from "./components/LoginForm";
+import Sidebar from "./components/Sidebar";
+import StatsGrid from "./components/StatsGrid";
+import TopBar from "./components/TopBar";
+import {
+  createActivity,
+  deleteActivity,
+  getActivities,
+  getCustomerActivities,
+} from "./services/activityService";
+import {
+  clearSession,
+  fetchCurrentUser,
+  getStoredSession,
+  login,
+} from "./services/authService";
+import {
+  getCustomerById,
+  getCustomers,
+  updateCustomer,
+} from "./services/customerService";
 
 function App() {
   const [locale, setLocale] = useState("tr");
+  const [session, setSession] = useState(() => getStoredSession());
+  const [currentUser, setCurrentUser] = useState(() => getStoredSession()?.user || null);
   const [customers, setCustomers] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -21,6 +39,7 @@ function App() {
   const [allActivities, setAllActivities] = useState([]);
   const [selectedCustomerActivities, setSelectedCustomerActivities] = useState([]);
   const [undoAction, setUndoAction] = useState(null);
+  const [bootError, setBootError] = useState("");
 
   const translations = {
     tr: {
@@ -102,6 +121,19 @@ function App() {
       filters: {
         searchPlaceholder: "İsim veya telefon ile ara",
         statusAll: "Tüm Durumlar",
+      },
+      auth: {
+        kicker: "Güvenli erişim",
+        title: "ClientHub CRM",
+        copy: "Müşteri verilerine erişmek için oturum açın.",
+        email: "E-posta",
+        password: "Şifre",
+        emailPlaceholder: "owner@clienthub.local",
+        passwordPlaceholder: "Şifreniz",
+        submit: "Giriş Yap",
+        loading: "Giriş yapılıyor...",
+        error: "Giriş başarısız",
+        logout: "Çıkış",
       },
       todayAppointmentsTitle: "Bugün Randevusu Olanlar",
       noTodayAppointments: "Bugün randevu görünmüyor.",
@@ -204,6 +236,19 @@ function App() {
         searchPlaceholder: "Search by name or phone",
         statusAll: "All Statuses",
       },
+      auth: {
+        kicker: "Secure access",
+        title: "ClientHub CRM",
+        copy: "Sign in before accessing customer data.",
+        email: "Email",
+        password: "Password",
+        emailPlaceholder: "owner@clienthub.local",
+        passwordPlaceholder: "Your password",
+        submit: "Sign In",
+        loading: "Signing in...",
+        error: "Sign in failed",
+        logout: "Logout",
+      },
       todayAppointmentsTitle: "Today Appointments",
       noTodayAppointments: "No appointment for today.",
       winbackTitle: "Win-Back Customers",
@@ -265,9 +310,27 @@ function App() {
     };
   }
 
-  async function loadCustomers() {
-    const data = await getCustomers();
-    const mapped = data.map((item) => ({
+  function mapCustomerSummary(item) {
+    return {
+      id: item.id,
+      name: item.full_name,
+      businessType: item.business_type || "-",
+      phone: item.phone || "-",
+      city: item.city || "-",
+      status: item.status || "lead",
+      lastContactedAt: item.last_contacted_at,
+      lastContactText: formatDaysWithoutContact(item.last_contacted_at),
+      lastContact: formatDaysWithoutContact(item.last_contacted_at),
+      lastVisitDateRaw: item.last_visit_date,
+      nextAppointmentDateRaw: item.next_appointment_date,
+      lastVisitDate: formatDateTime(item.last_visit_date),
+      nextAppointmentDate: formatDateTime(item.next_appointment_date),
+      serviceType: item.service_type || "-",
+    };
+  }
+
+  function mapCustomerDetail(item) {
+    return {
       id: item.id,
       name: item.full_name,
       businessType: item.business_type || "-",
@@ -284,20 +347,8 @@ function App() {
       lastVisitDate: formatDateTime(item.last_visit_date),
       nextAppointmentDate: formatDateTime(item.next_appointment_date),
       serviceType: item.service_type || "-",
-    }));
-
-    setCustomers(mapped);
-    if (!selectedCustomer && mapped.length > 0) {
-      setSelectedCustomer(mapped[0]);
-      await loadActivitiesForCustomer(mapped[0].id);
-    }
+    };
   }
-
-  useEffect(() => {
-    loadCustomers();
-    loadAllActivities();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   async function loadAllActivities() {
     const data = await getActivities();
@@ -309,21 +360,78 @@ function App() {
     setSelectedCustomerActivities(data.map(mapActivity));
   }
 
+  async function loadCustomerDetail(customerId) {
+    const data = await getCustomerById(customerId);
+    const mapped = mapCustomerDetail(data);
+    setSelectedCustomer(mapped);
+    return mapped;
+  }
+
+  async function loadCustomers() {
+    const data = await getCustomers();
+    const mapped = data.map(mapCustomerSummary);
+
+    setCustomers(mapped);
+    if (!selectedCustomer && mapped.length > 0) {
+      await loadCustomerDetail(mapped[0].id);
+      await loadActivitiesForCustomer(mapped[0].id);
+      return;
+    }
+
+    if (selectedCustomer?.id) {
+      const stillExists = mapped.some((customer) => customer.id === selectedCustomer.id);
+      if (stillExists) {
+        await loadCustomerDetail(selectedCustomer.id);
+      } else {
+        setSelectedCustomer(null);
+        setSelectedCustomerActivities([]);
+      }
+    }
+  }
+
+  useEffect(() => {
+    async function bootstrapApp() {
+      if (!session?.access_token) return;
+
+      try {
+        const user = await fetchCurrentUser();
+        setCurrentUser(user);
+        await loadCustomers();
+        await loadAllActivities();
+        setBootError("");
+      } catch (error) {
+        clearSession();
+        setSession(null);
+        setCurrentUser(null);
+        setCustomers([]);
+        setSelectedCustomer(null);
+        setAllActivities([]);
+        setSelectedCustomerActivities([]);
+        setBootError(error.message || "Oturum doğrulanamadı");
+      }
+    }
+
+    bootstrapApp();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.access_token]);
+
   const filteredCustomers = useMemo(() => {
-    return customers.filter((c) => {
+    return customers.filter((customer) => {
       const term = searchTerm.trim().toLowerCase();
       const matchedSearch =
-        !term || c.name.toLowerCase().includes(term) || c.phone.toLowerCase().includes(term);
-      const matchedStatus = statusFilter === "all" || c.status === statusFilter;
+        !term ||
+        customer.name.toLowerCase().includes(term) ||
+        customer.phone.toLowerCase().includes(term);
+      const matchedStatus = statusFilter === "all" || customer.status === statusFilter;
       return matchedSearch && matchedStatus;
     });
   }, [customers, searchTerm, statusFilter]);
 
   const winbackCustomers = useMemo(() => {
     return customers
-      .filter((c) => c.status !== "lost")
-      .filter((c) => {
-        const days = getDaysSince(c.lastVisitDateRaw);
+      .filter((customer) => customer.status !== "lost")
+      .filter((customer) => {
+        const days = getDaysSince(customer.lastVisitDateRaw);
         if (days === null) return true;
         return days >= 30;
       })
@@ -333,14 +441,14 @@ function App() {
   const todayAppointments = useMemo(() => {
     const now = new Date();
     return customers
-      .filter((c) => c.nextAppointmentDateRaw)
-      .filter((c) => {
-        const d = new Date(c.nextAppointmentDateRaw);
-        if (Number.isNaN(d.getTime())) return false;
+      .filter((customer) => customer.nextAppointmentDateRaw)
+      .filter((customer) => {
+        const date = new Date(customer.nextAppointmentDateRaw);
+        if (Number.isNaN(date.getTime())) return false;
         return (
-          d.getFullYear() === now.getFullYear() &&
-          d.getMonth() === now.getMonth() &&
-          d.getDate() === now.getDate()
+          date.getFullYear() === now.getFullYear() &&
+          date.getMonth() === now.getMonth() &&
+          date.getDate() === now.getDate()
         );
       })
       .slice(0, 5);
@@ -348,9 +456,9 @@ function App() {
 
   const stats = useMemo(() => {
     const total = customers.length;
-    const leadCount = customers.filter((c) => c.status === "lead").length;
-    const customerCount = customers.filter((c) => c.status === "customer").length;
-    const withPhone = customers.filter((c) => c.phone && c.phone !== "-").length;
+    const leadCount = customers.filter((customer) => customer.status === "lead").length;
+    const customerCount = customers.filter((customer) => customer.status === "customer").length;
+    const withPhone = customers.filter((customer) => customer.phone && customer.phone !== "-").length;
 
     return [
       { id: 1, label: t.stats.total, value: String(total), trend: t.stats.live, tone: "success" },
@@ -363,15 +471,14 @@ function App() {
   async function handleSaveCustomerNotes(customerId, notes) {
     await updateCustomer(customerId, { notes });
     await loadCustomers();
-    setSelectedCustomer((prev) => (prev ? { ...prev, notes } : prev));
+    await loadCustomerDetail(customerId);
   }
 
   async function handleSelectCustomer(customer) {
-    setSelectedCustomer(customer);
-    if (customer?.id) {
-      await loadActivitiesForCustomer(customer.id);
-      setActiveMenuItem(t.sidebarMenu[2]);
-    }
+    if (!customer?.id) return;
+    await loadCustomerDetail(customer.id);
+    await loadActivitiesForCustomer(customer.id);
+    setActiveMenuItem(t.sidebarMenu[2]);
   }
 
   async function handleAddActivity(customerId, payload) {
@@ -387,7 +494,7 @@ function App() {
 
   async function handleQuickAction(customerId, actionKey) {
     const now = new Date().toISOString();
-    const currentCustomer = customers.find((c) => c.id === customerId);
+    const currentCustomer = customers.find((customer) => customer.id === customerId);
     const previousLastContactedAt = currentCustomer?.lastContactedAt || null;
     const actionMap = {
       called: { type: "call", note: locale === "tr" ? "Müşteri arandı." : "Customer was called." },
@@ -396,7 +503,13 @@ function App() {
     };
     const action = actionMap[actionKey];
     if (!action) return;
-    const created = await createActivity({ customerId, type: action.type, note: action.note, activityDate: now });
+
+    const created = await createActivity({
+      customerId,
+      type: action.type,
+      note: action.note,
+      activityDate: now,
+    });
     await updateCustomer(customerId, { lastContactedAt: now });
     setUndoAction({
       customerId,
@@ -404,17 +517,20 @@ function App() {
       previousLastContactedAt,
     });
     await loadCustomers();
+    await loadCustomerDetail(customerId);
     await loadActivitiesForCustomer(customerId);
     await loadAllActivities();
   }
 
   async function handleUndoQuickAction() {
     if (!undoAction) return;
+
     await deleteActivity(undoAction.activityId);
     await updateCustomer(undoAction.customerId, {
       lastContactedAt: undoAction.previousLastContactedAt,
     });
     await loadCustomers();
+    await loadCustomerDetail(undoAction.customerId);
     await loadActivitiesForCustomer(undoAction.customerId);
     await loadAllActivities();
     setUndoAction(null);
@@ -432,31 +548,55 @@ function App() {
       activityDate: appointmentDate,
     });
     await loadCustomers();
+    await loadCustomerDetail(customerId);
     await loadActivitiesForCustomer(customerId);
     await loadAllActivities();
   }
 
+  async function handleLogin(email, password) {
+    const nextSession = await login(email, password);
+    setSession(nextSession);
+    setCurrentUser(nextSession.user);
+    setBootError("");
+  }
+
+  function handleLogout() {
+    clearSession();
+    setSession(null);
+    setCurrentUser(null);
+    setCustomers([]);
+    setSelectedCustomer(null);
+    setAllActivities([]);
+    setSelectedCustomerActivities([]);
+    setUndoAction(null);
+    setIsFormOpen(false);
+  }
+
   const lostRate = useMemo(() => {
     if (customers.length === 0) return "0%";
-    const lost = customers.filter((c) => c.status === "lost").length;
+    const lost = customers.filter((customer) => customer.status === "lost").length;
     return `${Math.round((lost / customers.length) * 100)}%`;
   }, [customers]);
 
   const segmentSummary = useMemo(() => {
-    const red = customers.filter((c) => {
-      const days = getDaysSince(c.lastVisitDateRaw);
+    const red = customers.filter((customer) => {
+      const days = getDaysSince(customer.lastVisitDateRaw);
       return days === null || days >= 30;
     }).length;
-    const yellow = customers.filter((c) => {
-      const days = getDaysSince(c.lastVisitDateRaw);
+    const yellow = customers.filter((customer) => {
+      const days = getDaysSince(customer.lastVisitDateRaw);
       return days !== null && days >= 7 && days < 30;
     }).length;
-    const green = customers.filter((c) => {
-      const days = getDaysSince(c.lastVisitDateRaw);
+    const green = customers.filter((customer) => {
+      const days = getDaysSince(customer.lastVisitDateRaw);
       return days !== null && days < 7;
     }).length;
     return { red, yellow, green };
   }, [customers]);
+
+  if (!session?.access_token) {
+    return <LoginForm texts={t.auth} onLogin={handleLogin} />;
+  }
 
   return (
     <div className="app-shell">
@@ -475,8 +615,16 @@ function App() {
           closeFormLabel={t.closeForm}
           locale={locale}
           onToggleLocale={() => setLocale((prev) => (prev === "tr" ? "en" : "tr"))}
+          currentUserEmail={currentUser?.email || session.user?.email || "-"}
+          logoutLabel={t.auth.logout}
+          onLogout={handleLogout}
         />
         <main className="content">
+          {bootError ? (
+            <section className="customers-panel">
+              <p className="form-error">{bootError}</p>
+            </section>
+          ) : null}
           <h2 className="page-title">{activeMenuItem}</h2>
 
           {activeMenuItem === t.sidebarMenu[0] && (
@@ -491,9 +639,9 @@ function App() {
                   <p>{t.noTodayAppointments}</p>
                 ) : (
                   <ul className="todo-list">
-                    {todayAppointments.map((c) => (
-                      <li key={c.id}>
-                        <strong>{c.name}</strong> - {c.nextAppointmentDate}
+                    {todayAppointments.map((customer) => (
+                      <li key={customer.id}>
+                        <strong>{customer.name}</strong> - {customer.nextAppointmentDate}
                       </li>
                     ))}
                   </ul>
@@ -508,15 +656,16 @@ function App() {
                   <p>{t.noWinback}</p>
                 ) : (
                   <ul className="todo-list">
-                    {winbackCustomers.map((c) => (
-                      <li key={c.id}>
-                        <strong>{c.name}</strong> - {getDaysSince(c.lastVisitDateRaw) ?? 30} {t.daysNotVisited}
+                    {winbackCustomers.map((customer) => (
+                      <li key={customer.id}>
+                        <strong>{customer.name}</strong> - {getDaysSince(customer.lastVisitDateRaw) ?? 30} {t.daysNotVisited}
                         <span className="risk-chip">{t.atRisk}</span>
                       </li>
                     ))}
                   </ul>
                 )}
               </section>
+
               <section className="customers-panel">
                 <div className="panel-header">
                   <h3 className="panel-title">{t.segmentTitle}</h3>
@@ -546,13 +695,13 @@ function App() {
                   className="filter-input"
                   type="text"
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(event) => setSearchTerm(event.target.value)}
                   placeholder={t.filters.searchPlaceholder}
                 />
                 <select
                   className="filter-select"
                   value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
+                  onChange={(event) => setStatusFilter(event.target.value)}
                 >
                   <option value="all">{t.filters.statusAll}</option>
                   <option value="lead">{t.table.statusLead}</option>
@@ -568,7 +717,7 @@ function App() {
                 texts={t.table}
               />
 
-              {isFormOpen && (
+              {isFormOpen ? (
                 <CustomerForm
                   texts={t.form}
                   onCustomerCreated={async () => {
@@ -576,7 +725,7 @@ function App() {
                     setIsFormOpen(false);
                   }}
                 />
-              )}
+              ) : null}
             </>
           )}
 
@@ -645,12 +794,12 @@ function App() {
             activeMenuItem !== t.sidebarMenu[1] &&
             activeMenuItem !== t.sidebarMenu[2] &&
             activeMenuItem !== t.sidebarMenu[3] && (
-            <section className="customers-panel">
-              <div className="panel-header">
-                <h3 className="panel-title">{t.comingSoon}</h3>
-              </div>
-            </section>
-          )}
+              <section className="customers-panel">
+                <div className="panel-header">
+                  <h3 className="panel-title">{t.comingSoon}</h3>
+                </div>
+              </section>
+            )}
         </main>
       </div>
     </div>

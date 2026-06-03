@@ -1,11 +1,20 @@
 from datetime import datetime
+from enum import Enum
 from typing import Optional
 from pydantic import BaseModel, Field
 
 
+class ActivityType(str, Enum):
+    call = "call"
+    visit = "visit"
+    note = "note"
+    message = "message"
+    appointment = "appointment"
+
+
 class ActivityBase(BaseModel):
     customer_id: int
-    type: str = Field(min_length=2, max_length=30)
+    type: ActivityType
     note: str = Field(min_length=2, max_length=1000)
     activity_date: datetime
 

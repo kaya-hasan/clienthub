@@ -1,9 +1,10 @@
-from sqlalchemy import Column, Integer, String, DateTime, func
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, func
 from app.db.session import Base
 
 class Customer(Base):
     __tablename__ = "customers"
     id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     full_name = Column(String, index=True, nullable=False)
     phone = Column(String, index=True)
     email = Column(String, index=True)
@@ -17,4 +18,3 @@ class Customer(Base):
     last_visit_date = Column(DateTime, index=True, nullable=True)
     next_appointment_date = Column(DateTime, index=True, nullable=True)
     service_type = Column(String, index=True, nullable=True)
-

@@ -4,8 +4,8 @@ from app.models.customer import Customer
 from app.schemas.activity import ActivityCreate
 
 
-def create_activity(db: Session, payload: ActivityCreate):
-    customer = db.query(Customer).filter(Customer.id == payload.customer_id).first()
+def create_activity(db: Session, payload: ActivityCreate, owner_id: int):
+    customer = db.query(Customer).filter(Customer.id == payload.customer_id, Customer.owner_id == owner_id).first()
     if customer is None:
         return {"success": False, "message": "Customer not found"}
 
@@ -16,10 +16,11 @@ def create_activity(db: Session, payload: ActivityCreate):
     return {"success": True, "data": activity}
 
 
-def list_activities(db: Session, skip: int = 0, limit: int = 100):
+def list_activities(db: Session, owner_id: int, skip: int = 0, limit: int = 100):
     rows = (
         db.query(Activity, Customer.full_name)
         .join(Customer, Customer.id == Activity.customer_id)
+        .filter(Customer.owner_id == owner_id)
         .order_by(Activity.activity_date.desc())
         .offset(skip)
         .limit(limit)
@@ -39,10 +40,11 @@ def list_activities(db: Session, skip: int = 0, limit: int = 100):
     ]
 
 
-def list_customer_activities(db: Session, customer_id: int, skip: int = 0, limit: int = 100):
+def list_customer_activities(db: Session, customer_id: int, owner_id: int, skip: int = 0, limit: int = 100):
     rows = (
         db.query(Activity, Customer.full_name)
         .join(Customer, Customer.id == Activity.customer_id)
+        .filter(Customer.owner_id == owner_id)
         .filter(Activity.customer_id == customer_id)
         .order_by(Activity.activity_date.desc())
         .offset(skip)
@@ -63,8 +65,13 @@ def list_customer_activities(db: Session, customer_id: int, skip: int = 0, limit
     ]
 
 
-def delete_activity(db: Session, activity_id: int):
-    activity = db.query(Activity).filter(Activity.id == activity_id).first()
+def delete_activity(db: Session, activity_id: int, owner_id: int):
+    activity = (
+        db.query(Activity)
+        .join(Customer, Customer.id == Activity.customer_id)
+        .filter(Activity.id == activity_id, Customer.owner_id == owner_id)
+        .first()
+    )
     if activity is None:
         return {"success": False, "message": "Activity not found"}
     db.delete(activity)

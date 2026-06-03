@@ -1,3 +1,7 @@
+import { authFetch } from "./authService";
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+
 export async function createCustomer(payload) {
   const apiPayload = {
     full_name: payload.name,
@@ -13,11 +17,8 @@ export async function createCustomer(payload) {
     service_type: payload.serviceType || null,
   };
 
-  const response = await fetch("http://127.0.0.1:8000/customers/", {
+  const response = await authFetch(`${API_BASE_URL}/customers/`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
     body: JSON.stringify(apiPayload),
   });
 
@@ -30,7 +31,7 @@ export async function createCustomer(payload) {
 }
 
 export async function getCustomers() {
-  const response = await fetch("http://127.0.0.1:8000/customers/");
+  const response = await authFetch(`${API_BASE_URL}/customers/`);
 
   if (!response.ok) {
     const errorData = await response.json();
@@ -39,6 +40,17 @@ export async function getCustomers() {
 
   const data = await response.json();
   return data;
+}
+
+export async function getCustomerById(customerId) {
+  const response = await authFetch(`${API_BASE_URL}/customers/${customerId}`);
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.detail || "Müşteri detayı getirilemedi");
+  }
+
+  return response.json();
 }
 
 export async function updateCustomer(customerId, payload) {
@@ -66,13 +78,10 @@ export async function updateCustomer(customerId, payload) {
       : {}),
   };
 
-  const response = await fetch(
-    `http://127.0.0.1:8000/customers/${customerId}`,
+  const response = await authFetch(
+    `${API_BASE_URL}/customers/${customerId}`,
     {
       method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
       body: JSON.stringify(apiPayload),
     },
   );
